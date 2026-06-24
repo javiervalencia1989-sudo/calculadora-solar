@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hora Solar Pico (HSP)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root{
+    --bg:#0e1014;--card:#181b21;--card2:#212530;--ink:#eef1f5;--muted:#98a1b0;
+    --line:#2a2f3a;--sun:#ffb627;--sun-d:#e09500;--teal:#1dd3a0;--blue:#4ea8ff;--warn:#ff6b4a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.55;
+    background-image:radial-gradient(circle at 88% -10%,rgba(255,182,39,.13),transparent 42%);}
+  a{color:var(--sun)}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 20px 60px;}
+  header{display:flex;align-items:center;gap:14px;margin-bottom:22px;}
+  .sun{width:42px;height:42px;flex:0 0 auto;animation:spin 40s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion){.sun{animation:none}}
+  h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;}
+  header p{margin:2px 0 0;font-size:12.5px;color:var(--muted);}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;}
+  .searchrow{display:flex;gap:10px;align-items:stretch;}
+  .searchrow input{flex:1;padding:12px 14px;border:1px solid var(--line);border-radius:10px;
+    background:var(--card2);color:var(--ink);font-size:15px;}
+  .searchrow input:focus{outline:none;border-color:var(--sun);box-shadow:0 0 0 3px rgba(255,182,39,.15);}
+  button{padding:12px 20px;border:none;border-radius:10px;background:var(--sun);color:#1a1206;
+    font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap;}
+  button:hover{background:var(--sun-d);}button:disabled{opacity:.5;cursor:wait;}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;}
+  #map{height:300px;border-radius:12px;border:1px solid var(--line);margin-top:14px;background:var(--card2);overflow:hidden;}
+  details{margin-top:12px;}
+  summary{cursor:pointer;font-size:12.5px;color:var(--muted);}
+  .opts{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;}
+  .opts .f{flex:1;min-width:150px;}
+  label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;}
+  select,.opts input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;
+    background:var(--card2);color:var(--ink);font-size:13px;}
+  #status{padding:11px 14px;border-radius:9px;font-size:13px;margin-top:12px;display:none;align-items:center;gap:8px;}
+  #status.show{display:flex;}
+  #status.err{background:rgba(255,107,74,.12);color:#ffb4a3;border:1px solid rgba(255,107,74,.3);}
+  #status.load{background:rgba(78,168,255,.1);color:#a9d2ff;border:1px solid rgba(78,168,255,.25);}
+  .spin{width:14px;height:14px;border:2px solid rgba(169,210,255,.3);border-top-color:#a9d2ff;
+    border-radius:50%;animation:sp .7s linear infinite;flex:0 0 auto;}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #results{display:none;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:11px;margin-bottom:18px;}
+  .stat{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:14px;}
+  .stat .lbl{font-size:10.5px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+  .stat .val{font-size:22px;font-weight:700;}
+  .stat .sub{font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .stat.hot .val{color:var(--sun);}.stat.cold .val{color:var(--warn);}
+  h3{font-size:11px;font-weight:600;margin:20px 0 9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:8px;}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .dot{width:10px;height:10px;border-radius:3px;}
+  .chartbox{position:relative;height:280px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--line);}
+  th:first-child,td:first-child{text-align:left;}
+  th{font-weight:600;color:var(--muted);font-size:10.5px;text-transform:uppercase;}
+  tr.min td{background:rgba(255,107,74,.1);}tr.min td:first-child{font-weight:700;color:var(--warn);}
+  .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:600;}
+  .badge.g{background:rgba(29,211,160,.15);color:var(--teal);}
+  .badge.w{background:rgba(255,107,74,.16);color:var(--warn);}
+  .foot{font-size:11.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:13px;margin-top:18px;}
+  .seriesbtn{margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="sun" viewBox="0 0 42 42" fill="none">
+      <circle cx="21" cy="21" r="8" fill="#ffb627"/>
+      <g stroke="#ffb627" stroke-width="2.3" stroke-linecap="round">
+        <line x1="21" y1="2" x2="21" y2="9"/><line x1="21" y1="33" x2="21" y2="40"/>
+        <line x1="2" y1="21" x2="9" y2="21"/><line x1="33" y1="21" x2="40" y2="21"/>
+        <line x1="8" y1="8" x2="13" y2="13"/><line x1="29" y1="29" x2="34" y2="34"/>
+        <line x1="34" y1="8" x2="29" y2="13"/><line x1="13" y1="29" x2="8" y2="34"/>
+      </g>
+    </svg>
+    <div>
+      <h1>Hora Solar Pico</h1>
+      <p>Escribe coordenadas o toca el mapa · datos oficiales de PVGIS</p>
+    </div>
+  </header>
+
+  <div class="panel">
+    <div class="searchrow">
+      <input id="coords" type="text" value="22.917799, -82.540650"
+             placeholder="22.917799, -82.540650 (formato Google Maps)">
+      <button id="go">Calcular</button>
+    </div>
+    <p class="hint">Pega coordenadas de Google Maps, o haz clic / arrastra el marcador.</p>
+    <div id="map"></div>
+    <details>
+      <summary>⚙️ Opciones avanzadas</summary>
+      <div class="opts">
+        <div class="f"><label>Inclinación</label>
+          <select id="tilt">
+            <option value="opt" selected>Óptima (auto)</option>
+            <option value="0">0° horizontal</option><option value="15">15°</option>
+            <option value="20">20°</option><option value="23">23°</option><option value="30">30°</option>
+          </select></div>
+        <div class="f"><label>Base de datos</label>
+          <select id="db">
+            <option value="">Automática</option>
+            <option value="PVGIS-NSRDB">NSRDB (América)</option>
+            <option value="PVGIS-SARAH3">SARAH3 (Eur/Áfr)</option>
+            <option value="PVGIS-ERA5">ERA5 (global)</option>
+          </select></div>
+        <div class="f"><label>Pérdidas (%)</label>
+          <input id="loss" type="number" value="14" min="0" max="40"></div>
+      </div>
+    </details>
+    <div id="status"></div>
+  </div>
+
+  <div class="panel" id="results">
+    <div class="cards" id="cards"></div>
+    <h3>HSP mensual (promedio multianual)</h3>
+    <div class="legend">
+      <span><span class="dot" style="background:#ffb627"></span>alta ≥5.5</span>
+      <span><span class="dot" style="background:#ff8c42"></span>media 4.5–5.5</span>
+      <span><span class="dot" style="background:#8a6d3b"></span>baja &lt;4.5</span>
+    </div>
+    <div class="chartbox"><canvas id="monthChart"></canvas></div>
+
+    <button class="sec seriesbtn" id="loadSeries" type="button"
+      style="background:var(--card2);color:var(--ink);border:1px solid var(--line);font-weight:600;margin-top:18px;">
+      📉 Cargar mínimas históricas (~18 años)</button>
+
+    <div id="seriesSection" style="display:none">
+      <h3>Mínima histórica anual</h3>
+      <div class="legend">
+        <span><span class="dot" style="background:#4ea8ff"></span>HSP media por año</span>
+        <span><span class="dot" style="background:#ff6b4a"></span>año mínimo</span>
+      </div>
+      <div class="chartbox"><canvas id="yearChart"></canvas></div>
+      <h3>Detalle por año</h3>
+      <div style="overflow-x:auto"><table id="yearTable"></table></div>
+    </div>
+
+    <div class="foot" id="meta"></div>
+  </div>
+</div>
+
+<script>
+const MONTHS=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const DAYS=[31,28.25,31,30,31,30,31,31,30,31,30,31];
+const $=id=>document.getElementById(id);
+let map,marker,chMonth,chYear,lastBase=null;
+
+// proxies (funcionan desde https://, NO desde file://)
+const PROXIES=[
+  u=>'https://corsproxy.io/?url='+encodeURIComponent(u),
+  u=>'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u),
+  u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),
+];
+
+function parseCoords(){
+  const r=$('coords').value.trim().replace(/[()]/g,'');
+  const p=r.split(/[, ]+/).map(Number).filter(n=>!isNaN(n));
+  if(p.length<2)return null;
+  const[lat,lon]=p;
+  if(lat<-90||lat>90||lon<-180||lon>180)return null;
+  return{lat,lon};
+}
+function setCoords(lat,lon){$('coords').value=lat.toFixed(6)+', '+lon.toFixed(6);}
+function st(msg,type){const e=$('status');e.className='show '+type;
+  e.innerHTML=(type==='load'?'<span class="spin"></span>':'')+'<span>'+msg+'</span>';}
+function hideSt(){$('status').className='';}
+
+function buildBase(c){
+  const loss=$('loss').value||14,db=$('db').value,tilt=$('tilt').value;
+  let p=`lat=${c.lat}&lon=${c.lon}&loss=${loss}&peakpower=1&pvcalculation=1&mountingplace=free&outputformat=json`;
+  if(db)p+=`&raddatabase=${db}`;
+  if(tilt==='opt')p+=`&optimalinclination=1`;else p+=`&angle=${tilt}`;
+  return p;
+}
+async function getJSON(pvgisUrl,label){
+  const errs=[];
+  for(const wrap of PROXIES){
+    try{
+      const r=await fetch(wrap(pvgisUrl));
+      if(!r.ok){errs.push('HTTP '+r.status);continue;}
+      const t=await r.text();
+      const d=JSON.parse(t);
+      if(d.message&&!d.outputs)throw new Error('PVGIS: '+d.message);
+      if(!d.outputs){errs.push('sin datos');continue;}
+      return d;
+    }catch(e){
+      if(e.message&&e.message.startsWith('PVGIS:'))throw e;
+      errs.push(e.message);
+    }
+  }
+  throw new Error(errs.join(' · '));
+}
+
+async function calculate(){
+  const c=parseCoords();
+  if(!c){st('⚠️ Coordenadas inválidas. Ej: 22.9178, -82.5407','err');return;}
+  if(map&&marker){marker.setLatLng([c.lat,c.lon]);map.setView([c.lat,c.lon],8);}
+  $('go').disabled=true;$('results').style.display='none';$('seriesSection').style.display='none';
+  $('loadSeries').style.display='block';
+  lastBase=buildBase(c);
+  try{
+    st('Consultando PVGIS…','load');
+    const data=await getJSON(`https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?${lastBase}`);
+    hideSt();renderMonthly(data);
+    $('results').style.display='block';
+    $('results').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){
+    st('❌ '+e.message+'<br>Si estás abriendo el archivo localmente (file://), súbelo a GitHub Pages para que funcione automático.','err');
+  }finally{$('go').disabled=false;}
+}
+
+function renderMonthly(m){
+  const fixed=m.outputs.monthly.fixed;
+  const hsp=fixed.map((x,i)=>x['H(i)_m']/DAYS[i]);
+  const annual=m.outputs.totals.fixed['H(i)_y']/365;
+  const elev=m.inputs.location.elevation,slope=m.inputs.mounting_system.fixed.slope.value;
+  const maxH=Math.max(...hsp),minH=Math.min(...hsp);
+  window._cards=[
+    ['HSP anual',annual.toFixed(2),'kWh/m²/día','hot'],
+    ['Mes alto',MONTHS[hsp.indexOf(maxH)],maxH.toFixed(2)+' HSP',''],
+    ['Mes bajo',MONTHS[hsp.indexOf(minH)],minH.toFixed(2)+' HSP',''],
+    ['Inclinación',slope+'°','elev. '+Math.round(elev)+' m',''],
+  ];
+  paintCards();
+  if(chMonth)chMonth.destroy();
+  chMonth=new Chart($('monthChart'),{type:'bar',
+    data:{labels:MONTHS,datasets:[{data:hsp.map(v=>+v.toFixed(2)),
+      backgroundColor:hsp.map(v=>v>=5.5?'#ffb627':v>=4.5?'#ff8c42':'#8a6d3b'),borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>x.parsed.y.toFixed(2)+' HSP'}}},
+      scales:{y:{beginAtZero:true,grid:{color:'#2a2f3a'},ticks:{color:'#98a1b0'},
+        title:{display:true,text:'kWh/m²/día',color:'#98a1b0'}},
+        x:{grid:{color:'#2a2f3a'},ticks:{color:'#98a1b0',autoSkip:false}}}}});
+  const yr=m.inputs.meteo_data;
+  $('meta').innerHTML=`PVGIS 5.3 · BD ${yr.radiation_db} · ${yr.year_min}–${yr.year_max} · incl. ${slope}°`;
+}
+function paintCards(){$('cards').innerHTML=window._cards.map(([l,v,s,c])=>
+  `<div class="stat ${c}"><div class="lbl">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join('');}
+
+async function loadSeries(){
+  if(!lastBase)return;
+  $('loadSeries').disabled=true;
+  st('Descargando serie histórica (~18 años, puede tardar)…','load');
+  try{
+    const s=await getJSON(`https://re.jrc.ec.europa.eu/api/v5_3/seriescalc?${lastBase}`);
+    hideSt();renderSeries(s);
+    $('loadSeries').style.display='none';
+  }catch(e){st('❌ No se pudo cargar la serie: '+e.message,'err');}
+  finally{$('loadSeries').disabled=false;}
+}
+function renderSeries(s){
+  const hourly=s.outputs.hourly,sum={},cnt={};
+  for(const h of hourly){const y=h.time.slice(0,4);
+    let g=h['G(i)'];if(g===undefined)g=(h['Gb(i)']||0)+(h['Gd(i)']||0)+(h['Gr(i)']||0);
+    sum[y]=(sum[y]||0)+g;cnt[y]=(cnt[y]||0)+1;}
+  const valid=Object.keys(sum).sort().filter(y=>cnt[y]>=8000).map(y=>{
+    const leap=(+y%4===0&&+y%100!==0)||+y%400===0;return{y,hsp:(sum[y]/1000)/(leap?366:365)};});
+  const vY=valid.map(o=>o.y),vH=valid.map(o=>o.hsp);
+  const minH=Math.min(...vH),maxH=Math.max(...vH),mean=vH.reduce((a,b)=>a+b,0)/vH.length;
+  const minY=vY[vH.indexOf(minH)];
+  window._cards.push(['Mín. histórica',minH.toFixed(2),'año '+minY,'cold']);
+  window._cards.push(['Media '+vY[0]+'–'+vY.at(-1),mean.toFixed(2),vY.length+' años','']);
+  paintCards();
+  $('seriesSection').style.display='block';
+  if(chYear)chYear.destroy();
+  chYear=new Chart($('yearChart'),{type:'bar',
+    data:{labels:vY,datasets:[{data:vH.map(v=>+v.toFixed(2)),
+      backgroundColor:vH.map(v=>v===minH?'#ff6b4a':'#4ea8ff'),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>x.parsed.y.toFixed(2)+' HSP'}}},
+      scales:{y:{min:Math.floor(minH*10)/10-.3,suggestedMax:maxH+.2,
+        grid:{color:'#2a2f3a'},ticks:{color:'#98a1b0'},title:{display:true,text:'kWh/m²/día',color:'#98a1b0'}},
+        x:{grid:{color:'#2a2f3a'},ticks:{color:'#98a1b0',autoSkip:false,maxRotation:45}}}}});
+  let rows=`<tr><th>Año</th><th>HSP media</th><th>vs media</th><th></th></tr>`;
+  valid.forEach(o=>{const d=o.hsp-mean,m=o.hsp===minH;
+    rows+=`<tr class="${m?'min':''}"><td>${o.y}</td><td>${o.hsp.toFixed(2)}</td>`+
+      `<td>${d>=0?'+':''}${d.toFixed(2)}</td><td><span class="badge ${m?'w':'g'}">`+
+      `${m?'MÍNIMA':d>=0?'+':'−'}</span></td></tr>`;});
+  $('yearTable').innerHTML=rows;
+  $('seriesSection').scrollIntoView({behavior:'smooth'});
+}
+
+// mapa
+function makePin(){return L.divIcon({className:'',iconSize:[28,40],iconAnchor:[14,40],
+  html:'<svg width="28" height="40" viewBox="0 0 28 40"><path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.3 21.7 0 14 0z" fill="#ffb627" stroke="#0e1014" stroke-width="2"/><circle cx="14" cy="14" r="5.5" fill="#0e1014"/></svg>'});}
+function initMap(){
+  if(typeof L==='undefined'){$('map').style.display='none';return;}
+  const c=parseCoords()||{lat:22.9178,lon:-82.5407};
+  map=L.map('map',{zoomControl:true}).setView([c.lat,c.lon],6);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    {attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:19}).addTo(map);
+  marker=L.marker([c.lat,c.lon],{draggable:true,icon:makePin()}).addTo(map);
+  marker.on('dragend',()=>{const p=marker.getLatLng();setCoords(p.lat,p.lng);});
+  map.on('click',e=>{marker.setLatLng(e.latlng);setCoords(e.latlng.lat,e.latlng.lng);});
+  // forzar render de mosaicos varias veces (causa común de "mapa gris con marcador")
+  [100,400,900].forEach(ms=>setTimeout(()=>map.invalidateSize(),ms));
+}
+
+function loadScript(urls){return new Promise((res,rej)=>{let i=0;
+  (function go(){if(i>=urls.length){rej();return;}
+    const s=document.createElement('script');s.src=urls[i++];
+    s.onload=res;s.onerror=()=>{s.remove();go();};document.head.appendChild(s);})();});}
+
+async function boot(){
+  $('go').onclick=calculate;
+  $('loadSeries').onclick=loadSeries;
+  $('coords').addEventListener('keydown',e=>{if(e.key==='Enter')calculate();});
+  if(typeof L==='undefined'){try{await loadScript([
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
+    'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js']);}catch(e){}}
+  if(typeof Chart==='undefined'){try{await loadScript([
+    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js']);}catch(e){}}
+  initMap();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+</script>
+</body>
+</html>
